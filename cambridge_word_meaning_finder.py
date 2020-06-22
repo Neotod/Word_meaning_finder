@@ -1,15 +1,12 @@
 import requests
 from bs4 import BeautifulSoup
 
-import os
-address = r'F:\Projects\python'
-os.chdir(address)
-
 class Word:
     
     def __init__(self, word):
         self.word = word
-        self.info = []
+        # defs-> [def: dict] def-> {word_type: [definition: str, [examples: list], [more_examples: list]]}
+        self.defs = []
         self.url = r'https://dictionary.cambridge.org/dictionary/english/{}'.format(word)
         self.page_soup = ''
         
@@ -18,12 +15,12 @@ class Word:
     def get_page_html(self):
         response = requests.get(self.url)
 
-        message = "your word isn't correct or couldn't be found, try another word"
+        message = f"{self.word} isn't correct or couldn't be found, try another word"
         assert self.word in response.url, message
 
         self.page_soup = BeautifulSoup(response.text, 'html.parser')
     
-    def scrap_div(self):
+    def scrap_site(self):
         word_type_divs = self.page_soup.find('div', class_='di-body').find_all('div', class_='pr entry-body__el')
 
         for word_type_div in word_type_divs:
@@ -47,31 +44,32 @@ class Word:
                 def_key = 'def.' + str(def_num)
                 info[word_type][def_key] = [definition]
                 
-                # examples
-                example_spans = main_div.find('div', class_='def-block ddef_block').find('div', class_='def-body ddef_b').find_all('span', class_='eg deg')
+                # examples, if they exist
+                example_spans = main_div.find('div', class_='def-block ddef_block').find_all('span', class_='eg deg')
                 examples = []
-                for example_span in example_spans:
-                    example_text = example_span.text
+                if len(example_spans) != 0:
+                    for example_span in example_spans:
+                        example_text = example_span.text
+                        
+                        example_words = example_text.split(' ')
+                        for ex_word in example_words:
+                            if word in ex_word:
+                                index = example_words.index(ex_word)
+                                ex_word = f'`{ex_word}`'
+                                example_words[index] = ex_word
+                        
+                        example_text = ' '.join(example_words)
+                        examples.append(example_text)
                     
-                    example_words = example_text.split(' ')
-                    for ex_word in example_words:
-                        if word in ex_word:
-                            index = example_words.index(ex_word)
-                            ex_word = f'`{ex_word}`'
-                            example_words[index] = ex_word
-                    
-                    example_text = ' '.join(example_words)
-                    examples.append(example_text)
-                
                 info[word_type][def_key].append(examples)
                 
+                    
                 # more examples, if they exist
                 more_examples_div = main_div.find('div', class_='daccord')
                 examples = []
                 if more_examples_div != None:
                     example_lis = more_examples_div.find_all('li', class_='eg dexamp hax')
                     
-                    examples = []
                     for example_li in example_lis:
                         example_text = example_li.text
                         
@@ -87,21 +85,21 @@ class Word:
                     
                 info[word_type][def_key].append(examples)
 
-            self.info.append(info)
+            self.defs.append(info)
             
     def show_word_info(self):
         print('\n\n\n')
-        for info_dict in self.info:
-            word_type = list(info_dict.keys())[0]
+        for def_dict in self.defs:
+            word_type = list(def_dict.keys())[0]
             print(f'=>type:{word_type}')
             print('+----------------+')
             
-            definitions_keys = list(info_dict[word_type].keys())
+            definitions_keys = list(def_dict[word_type].keys())
             for def_key in definitions_keys:
-                definition = info_dict[word_type][def_key][0]
+                definition = def_dict[word_type][def_key][0]
                 print(f'=>{def_key}: {definition}')
                 
-                examples = info_dict[word_type][def_key][1]
+                examples = def_dict[word_type][def_key][1]
                 print('\n=>examples:\n')
                 if len(examples) != 0:
                     for example in examples:
@@ -109,7 +107,7 @@ class Word:
                 else:
                     print('There is no example in the site for this definition!')
                     
-                more_examples = info_dict[word_type][def_key][2]
+                more_examples = def_dict[word_type][def_key][2]
                 if len(more_examples) != 0:
                     print('\n=>more examples:\n')
                     for example in more_examples:
@@ -122,7 +120,7 @@ class Word:
 if __name__ == '__main__':
     word_input = input('enter word: ')
     word = Word(word_input)
-    word.scrap_div()
+    word.scrap_site()
     word.show_word_info()
     
     
