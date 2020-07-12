@@ -41,7 +41,7 @@ class Word_Meaning_Finder:
             
         print('>>> Words that are imported from the file:')
         for word in words:
-            print(word, end=' - ')
+            print(word.lower(), end=' - ')
         print()
         
         self.find_meaning(*words)
@@ -57,15 +57,15 @@ class Word_Meaning_Finder:
     def find_meaning(self, *words):
         # find english definitions and examples from cambridge dictionary
         for word in words:
-            print('cambridge', word)
-            camb_word = cambridge.Word(word)
+            print(f'>>>cambridge {word}[scraping...]')
+            camb_word = cambridge.Word(word.lower())
             camb_word.scrap_site()
             self.cambridge_defs[word] = camb_word.defs
             
         # find persian translation and synonyms of word from google transllate
         for word in words:
-            print('google_t', word)
-            google_tr_word = google_t.Word(word)
+            print(f'>>>google translate {word}[scraping...]')
+            google_tr_word = google_t.Word(word.lower())
             google_tr_word.scrap_site()
             self.google_trans[word] = google_tr_word.translations
     
@@ -187,14 +187,71 @@ class Word_Meaning_Finder:
                 file.write('\n\n\n')
     
 if __name__ == '__main__':
-    source_path = r'C:\Users\Neotod\Desktop\anki_them.txt'
-    meaning_finder = Word_Meaning_Finder(source_path)
-    meaning_finder.find_from_file(number_of_lines=1, update=True)
-    meaning_finder.show_meanings()
-    
-    dest_path = r'C:\Users\Neotod\Desktop\(MEANINGS)anki_them.txt'
-    meaning_finder.export_meanings(dest_path)
-    
-    
-    
+    while(True):
+        options = ['single_word', 'import_from_file']
+        for option in options:
+            number = options.index(option) + 1
+            print(f'{number}) {option}')
 
+        option_num = int(input('Which one you prefer? (1 or 2): '))
+
+        if option_num == 1:
+            word = input('Enter your word: ')
+            meaning_finder = Word_Meaning_Finder()
+            meaning_finder.find_meaning(word.lower())
+
+        elif option_num == 2:
+            source_path = input('Enter your source file path (you can choose default): ')
+            if source_path == 'default':
+                source_path = r'C:\Users\Neotod\Desktop\anki_them.txt'
+
+            meaning_finder = Word_Meaning_Finder(source_path)
+
+            option = input('lines or words?: ')
+            if option == 'lines':
+                lines = int(input('Enter number_of_lines: '))
+
+                option = input('update the input file? (y/n): ')
+                bool_option = True if option == 'y' else False
+
+                meaning_finder.find_from_file(number_of_lines=lines, update=bool_option)
+
+            elif option == 'words':
+                words = int(input('Enter number_of_words: '))
+
+                option = input('update the input file? (y/n): ')
+                bool_option = True if option == 'y' else False
+
+                meaning_finder.find_from_file(number_of_words=lines, update=bool_option)
+            else:
+                raise Exception('Please select just between above options!')
+            
+        else:
+            raise Exception('Please select just between above options')
+
+        print('\nYipess!, output is ready. What do you want to do with?')
+        output_options = ['show_it', 'export_it_to_file']
+        for option in output_options:
+            number = output_options.index(option) + 1
+            print(f'{number}) {option}')
+
+        option = int(input('Enter the option number?(1/2): '))
+
+        if option == 1:
+            meaning_finder.show_meanings()
+        elif option == 2:
+            dest_path = input('Enter your destination file path (you can choose default): ')
+            if dest_path == 'default':
+                dest_path = r'C:\Users\Neotod\Desktop\(MEANINGS)anki_them.txt'
+
+            meaning_finder.export_meanings(dest_path)
+        else:
+            raise Exception('Please select just between above options!')
+        
+        
+        exit_option = input('\n\t Want to have another try? (y/n)').lower()
+        if exit_option == 'y':
+            continue
+        else:
+            break
+    

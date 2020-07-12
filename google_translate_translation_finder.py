@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 class Word:
     def __init__(self, word):
         self.word = word
-        self.url = r'http://translate.google.com/#view=home&op=translate&sl=en&tl=fa&text={}'.format(self.word)
+        self.url = r'http://translate.google.com/#view=home&op=translate&sl=en&tl=fa&text={}'.format(self.word.replace(' ', '%20'))
         self.params = {''}
         self.translations = {}
         self.page_soup = ''
@@ -14,7 +14,7 @@ class Word:
         self.get_page_html()
     
     def check_word(self):
-        cambridge_url = 'https://dictionary.cambridge.org/dictionary/english/{}'.format(self.word)
+        cambridge_url = 'https://dictionary.cambridge.org/dictionary/english/{}'.format(self.word.replace(' ', '-'))
         request = requests.get(cambridge_url)
         
         message = f'{self.word} is wrong or unrecognizable, please try another word'

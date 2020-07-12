@@ -4,10 +4,10 @@ from bs4 import BeautifulSoup
 class Word:
     
     def __init__(self, word):
-        self.word = word
+        self.word = word.strip()
         # defs-> [def: dict] def-> {word_type: [definition: str, [examples: list], [more_examples: list]]}
         self.defs = []
-        self.url = r'https://dictionary.cambridge.org/dictionary/english/{}'.format(word)
+        self.url = r'https://dictionary.cambridge.org/dictionary/english/{}'.format(word.replace(' ', '-'))
         self.page_soup = ''
         
         self.get_page_html()
@@ -16,7 +16,7 @@ class Word:
         response = requests.get(self.url)
 
         message = f"{self.word} isn't correct or couldn't be found, try another word"
-        assert self.word in response.url, message
+        assert self.word.replace(' ', '-') in response.url, message
 
         self.page_soup = BeautifulSoup(response.text, 'html.parser')
     
@@ -39,7 +39,7 @@ class Word:
                 
                 # definition of word
                 def_num = section_divs.index(section_div) + 1
-                definition = main_div.find('div', class_='def-block ddef_block').find('div', class_='ddef_h').find('div', class_='def ddef_d db').text[:-2]
+                definition = main_div.find('div', class_='def-block ddef_block').find('div', class_='ddef_h').find('div', class_='def ddef_d db').text.strip(' :')
                 
                 def_key = 'def.' + str(def_num)
                 info[word_type][def_key] = [definition]
