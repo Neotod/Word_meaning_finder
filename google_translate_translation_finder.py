@@ -10,16 +10,15 @@ class Word:
         self.translations = {}
         self.page_soup = ''
         
-        self.check_word()
+        # self.check_word()
         self.get_page_html()
     
     def check_word(self):
         cambridge_url = 'https://dictionary.cambridge.org/dictionary/english/{}'.format(self.word.replace(' ', '-'))
-        request = requests.get(cambridge_url)
+        with requests.get(cambridge_url) as response:
+            message = f'{self.word} is wrong or unrecognizable, please try another word'
+            assert response.url == cambridge_url, message
         
-        message = f'{self.word} is wrong or unrecognizable, please try another word'
-        assert request.url == cambridge_url, message
-    
     def get_page_html(self):
         response = requests_html.HTML(url=self.url, html='str')
         try:

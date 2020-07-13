@@ -1,6 +1,9 @@
 import cambridge_word_meaning_finder as cambridge
 import google_translate_translation_finder as google_t
 
+import asyncio
+from time import perf_counter
+
 class Word_Meaning_Finder:
     def __init__(self, source_path: str = None):
         self.source_path = source_path
@@ -8,6 +11,8 @@ class Word_Meaning_Finder:
         
         self.cambridge_defs = {}
         self.google_trans = {}
+        
+        self.words = []
         
     def find_from_file(self, number_of_words: int = None, number_of_lines: int = None, update=False):
         condition = number_of_words == None or number_of_lines == None
@@ -39,12 +44,12 @@ class Word_Meaning_Finder:
                     
             cursor_pos = file.tell()
             
+        self.words = words
+            
         print('>>> Words that are imported from the file:')
         for word in words:
             print(word.lower(), end=' - ')
         print()
-        
-        self.find_meaning(*words)
         
         if update == True:
             with open(self.source_path, 'r') as file:
@@ -54,20 +59,35 @@ class Word_Meaning_Finder:
             with open(self.source_path, 'w') as file:
                 file.write(rest_string)
     
-    def find_meaning(self, *words):
-        # find english definitions and examples from cambridge dictionary
-        for word in words:
-            print(f'>>>cambridge {word}[scraping...]')
-            camb_word = cambridge.Word(word.lower())
-            camb_word.scrap_site()
-            self.cambridge_defs[word] = camb_word.defs
-            
-        # find persian translation and synonyms of word from google transllate
-        for word in words:
-            print(f'>>>google translate {word}[scraping...]')
-            google_tr_word = google_t.Word(word.lower())
-            google_tr_word.scrap_site()
-            self.google_trans[word] = google_tr_word.translations
+    async def async_main(self):
+        cambridge_coros = [self.find_meaning_cambridge(word) for word in self.words]
+        google_coros = [self.find_meaning_google(word) for word in self.words]
+        coros = []
+        coros.extend(cambridge_coros)
+        # coros.extend(google_coros)
+        
+        t1 = perf_counter()
+        await asyncio.gather(*coros)
+        t2 = perf_counter()
+        
+        print('time:  ', t2-t1)
+    
+    async def find_meaning_cambridge(self, word):
+        print(f'>>>cambridge {word}[scraping...]')
+        loop = asyncio.get_event_loop()
+        camb_word = await loop.run_in_executor(None, cambridge.Word, word.lower())
+        camb_word.scrap_site()
+        self.cambridge_defs[word] = camb_word.defs
+        print(f'>>>cambridge {word}[Done!]')
+    
+    async def find_meaning_google(self, word):
+        loop = asyncio.get_event_loop()
+        print(f'>>>google translate {word}[scraping...]')
+        google_tr_word = await loop.run_in_executor(None, google_t.Word, word.lower())
+        # google_tr_word = google_t.Word(word.lower())
+        google_tr_word.scrap_site()
+        self.google_trans[word] = google_tr_word.translations
+        print(f'>>>google translate {word}[Done!]')
     
     def show_meanings(self):
         length = len(self.cambridge_defs)
@@ -104,18 +124,18 @@ class Word_Meaning_Finder:
                             print(f'==> {example}')
                     print('\n+===============+\n')
                 
-            # show google translate translations
-            print('|GOOGLE TRANSLATE|'.center(50, '='))
-            print(f'+==={word}===+')
+            # # show google translate translations
+            # print('|GOOGLE TRANSLATE|'.center(50, '='))
+            # print(f'+==={word}===+')
             
-            for word_type in self.google_trans[word]:
-                print(word_type)
-                translations = self.google_trans[word][word_type]
-                for translation in translations:
-                    synonyms = translations[translation]
-                    print('{:30}{:80}'.format(translation, synonyms))
+            # for word_type in self.google_trans[word]:
+            #     print(word_type)
+            #     translations = self.google_trans[word][word_type]
+            #     for translation in translations:
+            #         synonyms = translations[translation]
+            #         print('{:30}{:80}'.format(translation, synonyms))
                     
-            print('\n\n')
+            # print('\n\n')
             
     
     def export_meanings(self, dest_path: str):
@@ -168,23 +188,23 @@ class Word_Meaning_Finder:
                         file.write('\n+===============+\n')
                         file.write('\n')
                     
-                # show google translate translations
-                file.write('|GOOGLE TRANSLATE|'.center(50, '='))
-                file.write('\n')
-                file.write(f'+==={word}===+')
-                file.write('\n')
+                # # show google translate translations
+                # file.write('|GOOGLE TRANSLATE|'.center(50, '='))
+                # file.write('\n')
+                # file.write(f'+==={word}===+')
+                # file.write('\n')
                 
-                for word_type in self.google_trans[word]:
-                    file.write(f'>>>{word_type}')
-                    file.write('\n')
+                # for word_type in self.google_trans[word]:
+                #     file.write(f'>>>{word_type}')
+                #     file.write('\n')
                     
-                    translations = self.google_trans[word][word_type]
-                    for translation in translations:
-                        synonyms = translations[translation]
-                        file.write('{:30}{:80}'.format(translation, synonyms))
-                        file.write('\n')
+                #     translations = self.google_trans[word][word_type]
+                #     for translation in translations:
+                #         synonyms = translations[translation]
+                #         file.write('{:30}{:80}'.format(translation, synonyms))
+                #         file.write('\n')
                         
-                file.write('\n\n\n')
+                # file.write('\n\n\n')
     
 if __name__ == '__main__':
     while(True):
@@ -198,7 +218,8 @@ if __name__ == '__main__':
         if option_num == 1:
             word = input('Enter your word: ')
             meaning_finder = Word_Meaning_Finder()
-            meaning_finder.find_meaning(word.lower())
+            meaning_finder.words = [word.lower()]
+            asyncio.run(meaning_finder.async_main())
 
         elif option_num == 2:
             source_path = input('Enter your source file path (you can choose default): ')
@@ -213,8 +234,10 @@ if __name__ == '__main__':
 
                 option = input('update the input file? (y/n): ')
                 bool_option = True if option == 'y' else False
-
+                
                 meaning_finder.find_from_file(number_of_lines=lines, update=bool_option)
+                
+                asyncio.run(meaning_finder.async_main())
 
             elif option == 'words':
                 words = int(input('Enter number_of_words: '))
@@ -223,6 +246,8 @@ if __name__ == '__main__':
                 bool_option = True if option == 'y' else False
 
                 meaning_finder.find_from_file(number_of_words=lines, update=bool_option)
+                
+                asyncio.run(meaning_finder.async_main())
             else:
                 raise Exception('Please select just between above options!')
             

@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+from time import perf_counter
 
 class Word:
     
@@ -13,12 +14,11 @@ class Word:
         self.get_page_html()
         
     def get_page_html(self):
-        response = requests.get(self.url)
+        with requests.get(self.url) as response:
+            message = f"{self.word} isn't correct or couldn't be found, try another word"
+            assert self.word.replace(' ', '-') in response.url, message
 
-        message = f"{self.word} isn't correct or couldn't be found, try another word"
-        assert self.word.replace(' ', '-') in response.url, message
-
-        self.page_soup = BeautifulSoup(response.text, 'html.parser')
+            self.page_soup = BeautifulSoup(response.text, 'html.parser')
     
     def scrap_site(self):
         word_type_divs = self.page_soup.find('div', class_='di-body').find_all('div', class_='pr entry-body__el')
