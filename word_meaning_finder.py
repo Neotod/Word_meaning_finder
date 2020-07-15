@@ -1,8 +1,14 @@
-import cambridge_word_meaning_finder as cambridge
-import google_translate_translation_finder as google_t
-
-import asyncio
+from bs4 import BeautifulSoup as BS
 from time import perf_counter
+
+import cambridge
+import google_translate
+
+from limit_as_complete import limit_as_complete
+import asyncio
+import sys
+
+from itertools import chain
 
 class Word_Meaning_Finder:
     def __init__(self, source_path: str = None):
@@ -13,8 +19,9 @@ class Word_Meaning_Finder:
         self.google_trans = {}
         
         self.words = []
+        self.time = 0
         
-    def find_from_file(self, number_of_words: int = None, number_of_lines: int = None, update=False):
+    def find_from_file(self, number_of_words: int = None, number_of_lines: int = None, update: bool=False):
         condition = number_of_words == None or number_of_lines == None
         assert condition, "You can't assign both number_of_words and number_of_lines arguments! Please assign one of them"
         
@@ -44,12 +51,15 @@ class Word_Meaning_Finder:
                     
             cursor_pos = file.tell()
             
-        self.words = words
-            
         print('>>> Words that are imported from the file:')
         for word in words:
             print(word.lower(), end=' - ')
         print()
+        
+        self.words = words
+        
+        # run the main coroutine to find the results
+        asyncio.run(self.async_main())
         
         if update == True:
             with open(self.source_path, 'r') as file:
@@ -60,35 +70,27 @@ class Word_Meaning_Finder:
                 file.write(rest_string)
     
     async def async_main(self):
-        cambridge_coros = [self.find_meaning_cambridge(word) for word in self.words]
-        google_coros = [self.find_meaning_google(word) for word in self.words]
-        coros = []
-        coros.extend(cambridge_coros)
-        # coros.extend(google_coros)
+        start_time = perf_counter()
         
-        t1 = perf_counter()
-        await asyncio.gather(*coros)
-        t2 = perf_counter()
+        cambridge_coros = (cambridge.find_meaning(word, self.words) for word in self.words)
+        google_coros = (google_translate.find_meaning(word, self.words) for word in self.words)
         
-        print('time:  ', t2-t1)
-    
-    async def find_meaning_cambridge(self, word):
-        print(f'>>>cambridge {word}[scraping...]')
-        loop = asyncio.get_event_loop()
-        camb_word = await loop.run_in_executor(None, cambridge.Word, word.lower())
-        camb_word.scrap_site()
-        self.cambridge_defs[word] = camb_word.defs
-        print(f'>>>cambridge {word}[Done!]')
-    
-    async def find_meaning_google(self, word):
-        loop = asyncio.get_event_loop()
-        print(f'>>>google translate {word}[scraping...]')
-        google_tr_word = await loop.run_in_executor(None, google_t.Word, word.lower())
-        # google_tr_word = google_t.Word(word.lower())
-        google_tr_word.scrap_site()
-        self.google_trans[word] = google_tr_word.translations
-        print(f'>>>google translate {word}[Done!]')
-    
+        coros = alt_coros(cambridge_coros, google_coros)
+        
+        for task in limit_as_complete(coros, 10):
+            result = await task
+            word_dict = result[1]
+            word = list(word_dict.keys())[0]
+            if result[0] == 'cam':
+                defs = word_dict[word]
+                self.cambridge_defs[word] = defs
+            else:
+                translations = word_dict[word]
+                self.google_trans[word] = translations
+                
+        end_time = perf_counter()
+        self.time = end_time - start_time
+        
     def show_meanings(self):
         length = len(self.cambridge_defs)
         for i in range(length):
@@ -124,19 +126,18 @@ class Word_Meaning_Finder:
                             print(f'==> {example}')
                     print('\n+===============+\n')
                 
-            # # show google translate translations
-            # print('|GOOGLE TRANSLATE|'.center(50, '='))
-            # print(f'+==={word}===+')
+            # show google translate translations
+            print('|GOOGLE TRANSLATE|'.center(50, '='))
+            print(f'+==={word}===+')
             
-            # for word_type in self.google_trans[word]:
-            #     print(word_type)
-            #     translations = self.google_trans[word][word_type]
-            #     for translation in translations:
-            #         synonyms = translations[translation]
-            #         print('{:30}{:80}'.format(translation, synonyms))
+            for word_type in self.google_trans[word]:
+                print(word_type)
+                translations = self.google_trans[word][word_type]
+                for translation in translations:
+                    synonyms = translations[translation]
+                    print('{:30}{:80}'.format(translation, synonyms))
                     
-            # print('\n\n')
-            
+            print('\n\n')
     
     def export_meanings(self, dest_path: str):
         with open(dest_path, 'w', encoding='utf-8') as file:
@@ -188,23 +189,33 @@ class Word_Meaning_Finder:
                         file.write('\n+===============+\n')
                         file.write('\n')
                     
-                # # show google translate translations
-                # file.write('|GOOGLE TRANSLATE|'.center(50, '='))
-                # file.write('\n')
-                # file.write(f'+==={word}===+')
-                # file.write('\n')
+                # show google translate translations
+                file.write(f'+==={word}===+')
+                file.write('\n')
+                file.write('|GOOGLE TRANSLATE|'.center(50, '='))
+                file.write('\n')
                 
-                # for word_type in self.google_trans[word]:
-                #     file.write(f'>>>{word_type}')
-                #     file.write('\n')
+                for word_type in self.google_trans[word]:
+                    file.write(f'>>>{word_type}')
+                    file.write('\n')
                     
-                #     translations = self.google_trans[word][word_type]
-                #     for translation in translations:
-                #         synonyms = translations[translation]
-                #         file.write('{:30}{:80}'.format(translation, synonyms))
-                #         file.write('\n')
+                    translations = self.google_trans[word][word_type]
+                    for translation in translations:
+                        synonyms = translations[translation]
+                        file.write('{:30}{:80}'.format(translation, synonyms))
+                        file.write('\n')
                         
-                # file.write('\n\n\n')
+                file.write('\n\n\n')
+                
+    @staticmethod
+    def alt_coros(*iterables: iter):
+        i = 0
+        while True:
+            try:
+                yield next(iterables[i])
+                i = 0 if i == 1 else 1
+            except StopIteration:
+                return
     
 if __name__ == '__main__':
     while(True):
@@ -228,32 +239,25 @@ if __name__ == '__main__':
 
             meaning_finder = Word_Meaning_Finder(source_path)
 
-            option = input('lines or words?: ')
+            option = input('lines or words?: ').lower()
+            option_num = int(input(f'Enter number of {option}: '))
+            
+            b_option = input('update the input file? (y/n): ').lower()
+            bool_option = True if b_option == 'y' else False
+            
             if option == 'lines':
-                lines = int(input('Enter number_of_lines: '))
-
-                option = input('update the input file? (y/n): ')
-                bool_option = True if option == 'y' else False
-                
-                meaning_finder.find_from_file(number_of_lines=lines, update=bool_option)
-                
-                asyncio.run(meaning_finder.async_main())
-
+                meaning_finder.find_from_file(number_of_lines=option_num, update=bool_option)
             elif option == 'words':
-                words = int(input('Enter number_of_words: '))
+                meaning_finder.find_from_file(number_of_words=option_num, update=bool_option)
 
-                option = input('update the input file? (y/n): ')
-                bool_option = True if option == 'y' else False
-
-                meaning_finder.find_from_file(number_of_words=lines, update=bool_option)
-                
-                asyncio.run(meaning_finder.async_main())
             else:
                 raise Exception('Please select just between above options!')
             
         else:
             raise Exception('Please select just between above options')
-
+        
+        print('results were gathered in about {:.3f}s'.format(meaning_finder.time))
+        
         print('\nYipess!, output is ready. What do you want to do with?')
         output_options = ['show_it', 'export_it_to_file']
         for option in output_options:
@@ -279,4 +283,3 @@ if __name__ == '__main__':
             continue
         else:
             break
-    
