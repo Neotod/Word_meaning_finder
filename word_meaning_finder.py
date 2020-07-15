@@ -1,14 +1,11 @@
 from bs4 import BeautifulSoup as BS
 from time import perf_counter
-
-import cambridge
-import google_translate
-
-from limit_as_complete import limit_as_complete
 import asyncio
 import sys
 
-from itertools import chain
+import scripts.cambridge as cambridge
+import scripts.google_translate as google_t
+from scripts.limit_as_complete import limit_as_complete
 
 class Word_Meaning_Finder:
     def __init__(self, source_path: str = None):
@@ -73,9 +70,9 @@ class Word_Meaning_Finder:
         start_time = perf_counter()
         
         cambridge_coros = (cambridge.find_meaning(word, self.words) for word in self.words)
-        google_coros = (google_translate.find_meaning(word, self.words) for word in self.words)
+        google_coros = (google_t.find_meaning(word, self.words) for word in self.words)
         
-        coros = alt_coros(cambridge_coros, google_coros)
+        coros = self.__class__.alt_coros(cambridge_coros, google_coros)
         
         for task in limit_as_complete(coros, 10):
             result = await task
@@ -205,8 +202,8 @@ class Word_Meaning_Finder:
                         file.write('{:30}{:80}'.format(translation, synonyms))
                         file.write('\n')
                         
-                file.write('\n\n\n')
-                
+                file.write('\n\n\n')        
+                    
     @staticmethod
     def alt_coros(*iterables: iter):
         i = 0
